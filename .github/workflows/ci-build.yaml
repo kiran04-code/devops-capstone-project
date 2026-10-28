@@ -1,0 +1,58 @@
+name: CI Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Lint and unit tests
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: accounts
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d accounts"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URI: postgresql://postgres:postgres@localhost:5432/accounts
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          # The course's nose 1.3.7 test runner requires Python 3.9.
+          python-version: '3.9'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          # nose loads plugins through setuptools' pkg_resources module.
+          python -m pip install --upgrade pip wheel 'setuptools<81'
+          python -m pip install -r requirements.txt
+
+      - name: Lint with Flake8
+        run: make lint
+
+      - name: Run unit tests with nosetests
+        run: nosetests -v --with-spec --spec-color --with-coverage --cover-package=service --cover-erase tests
